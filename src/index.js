@@ -3,6 +3,7 @@ import http from 'http';
 import { matchRouter } from "./routes/matches.js";
 import 'dotenv/config';
 import { attachWebSocketServer } from "./ws/server.js";
+import { securityMiddleware } from "./routes/arcjet.js";
 
 const PORT = Number(process.env.PORT) || 8000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -17,6 +18,7 @@ app.get("/", (req, res) => {
   res.json({ message: "Hello from Express" });
 });
 
+app.use(securityMiddleware());
 app.use('/matches',matchRouter);
 
 const {broadcastMatchCreated} = attachWebSocketServer(server);

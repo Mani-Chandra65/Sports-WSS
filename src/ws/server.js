@@ -1,4 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws";
+import { wsArcjet } from "../routes/arcjet.js";
 
 const HEARTBEAT_INTERVAL_MS = 30000;
 
@@ -37,7 +38,28 @@ export function attachWebSocketServer(server){
         clearInterval(interval);
     });
     
-    wss.on('connection',(socket) => {
+    wss.on('connection',async (socket,req) => {
+
+        if(wsArcjet){
+            try{
+                const decision = await wsArcjet.protect(req);
+
+                if(decision.isDenied()){
+                    const code = decision.reason.isRateLimit() ? 1013 : 1008;
+                    const reason = decision.reason.isRateLimit() ? 'Rate limit exceeded' : 'Access denied';
+
+                    socket.close(code,reason);
+                    // if(decision.reason.isRateLimit()){
+                    //     // return resizeBy.status(423).json({'error':'Too many requests'});
+                    // }
+                }
+            }catch(e){
+                console.error('WS Connection Error:',e);
+                socket.close(1011,'Server Security Error');
+                return;
+            }
+        }
+
         socket.isAlive = true;
         sendJSON(socket, {type:'welcome'});
 
