@@ -28,7 +28,6 @@ matchRouter.get('/',async (req,res) => {
     }catch(e){
         res.status(500).json({message:"Failed to load matches.", details:JSON.stringify(e)})
     }
-    res.status(200).json({message: "Matches List"});
 })
 
 matchRouter.post('/',async (req,res) => {
