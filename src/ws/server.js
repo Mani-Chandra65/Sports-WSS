@@ -6,22 +6,22 @@ const HEARTBEAT_INTERVAL_MS = 30000;
 
 const matchSubscribers = new Map();
 
-function subscribe(matchID,socket){
-    if(!matchSubscribers.has(matchID)){
-        matchSubscribers.set(matchID, new Set());
+function subscribe(matchId,socket){
+    if(!matchSubscribers.has(matchId)){
+        matchSubscribers.set(matchId, new Set());
     }
-    matchSubscribers.get(matchID).add(socket);
+    matchSubscribers.get(matchId).add(socket);
 }
 
-function unsubscribe(matchID,socket){
-    const subscribers = matchSubscribers.get(matchID);
+function unsubscribe(matchId,socket){
+    const subscribers = matchSubscribers.get(matchId);
 
     if(!subscribers) return;
 
     subscribers.delete(socket);
 
     if(subscribers.size === 0){
-        matchSubscribers.delete(matchID);
+        matchSubscribers.delete(matchId);
     }
 }
 
@@ -31,8 +31,8 @@ function cleanupSubscriptions(socket){
     }
 }
 
-function broadcastToMatch(matchID,payload){
-    const subscribers = matchSubscribers.get(matchID);
+function broadcastToMatch(matchId,payload){
+    const subscribers = matchSubscribers.get(matchId);
     if(!subscribers || subscribers.size === 0) return;
     const message = JSON.stringify(payload);
 
@@ -62,16 +62,16 @@ function handleMessage(socket,data){
         sendJSON(socket,{type:'error',message:'Invalid JSON'});
         return;
     }
-    if(message?.type=="subscribe" && Number.isInteger(message.matchID)){
-        subscribe(message.matchID,socket);
-        socket.subsciptions.add(message.matchID);
-        sendJSON(socket,{type:'subscribed',matchID:message.matchID});
+    if(message?.type=="subscribe" && Number.isInteger(message.matchId)){
+        subscribe(message.matchId,socket);
+        socket.subsciptions.add(message.matchId);
+        sendJSON(socket,{type:'subscribed',matchId:message.matchId});
         return;
     }
-    if(message?.type=="unsubscribe" && Number.isInteger(message.matchID)){
-        unsubscribe(message.matchID,socket);
-        socket.subsciptions.delete(message.matchID);
-        sendJSON(socket,{type:'unsubscribed',matchID:message.matchID});
+    if(message?.type=="unsubscribe" && Number.isInteger(message.matchId)){
+        unsubscribe(message.matchId,socket);
+        socket.subsciptions.delete(message.matchId);
+        sendJSON(socket,{type:'unsubscribed',matchId:message.matchId});
     }
 }
 
@@ -148,8 +148,8 @@ export function attachWebSocketServer(server){
         broadcastToAll(wss, {type:'match_created',data:match});
     }
 
-    function broadcastCommentary(matchID,comment){
-        broadcastToMatch(matchID,{type: 'commentary', data:comment})
+    function broadcastCommentary(matchId,comment){
+        broadcastToMatch(matchId,{type: 'commentary', data:comment})
     }
 
     return {broadcastMatchCreated,broadcastCommentary}
