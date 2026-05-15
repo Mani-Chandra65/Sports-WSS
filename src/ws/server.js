@@ -52,7 +52,8 @@ export function attachWebSocketServer(server){
                     return;
                 }
                 if (decision.results.some(isSpoofedBot)) {
-                    return res.status(403).json({ error: 'Forbidden!' });
+                    socket.close(1008, 'Access denied');
+                    return;
                 }
             }catch(e){
                 console.error('WS Connection Error:',e);
