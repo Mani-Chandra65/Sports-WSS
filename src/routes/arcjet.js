@@ -1,12 +1,15 @@
 import arcjet, { detectBot,shield, slidingWindow } from '@arcjet/node';
 import 'dotenv/config'
 
-const arcjetKey = process.env.ARCJET_KEY
-const arcjetMode = process.env.ARCJET_MODE == "DRY_RUN" ? "DRY_RUN" :'LIVE';
-
+const arcjetKey = process.env.ARCJET_KEY;
+const rawArcjetMode = process.env.ARCJET_MODE ?? "LIVE";
+if (rawArcjetMode !== "LIVE" && rawArcjetMode !== "DRY_RUN") {
+    throw new Error(`Invalid ARCJET_MODE: ${rawArcjetMode}`);
+}
+const arcjetMode = rawArcjetMode;
 if(!arcjetKey) throw new Error('ARCJET KEY is missing');
 
-export const httpArcjet = arcjetKey ?
+export const httpArcjet =
     arcjet({
         key:arcjetKey,
         rules: [
@@ -14,9 +17,9 @@ export const httpArcjet = arcjetKey ?
             detectBot({mode:arcjetMode, allow:['CATEGORY:SEARCH_ENGINE','CATEGORY:PREVIEW']}),
             slidingWindow({mode:arcjetMode, interval:'10s', max:50})
         ]
-    }) : null;
+    });
 
-export const wsArcjet = arcjetKey ?
+export const wsArcjet = 
     arcjet({
         key:arcjetKey,
         rules: [
@@ -24,7 +27,7 @@ export const wsArcjet = arcjetKey ?
             detectBot({mode:arcjetMode, allow:['CATEGORY:SEARCH_ENGINE','CATEGORY:PREVIEW']}),
             slidingWindow({mode:arcjetMode, interval:'2s', max:5})
         ]
-    }) : null;
+    });
 
 export function securityMiddleware(){
     return async (req,res,next) => {
@@ -37,6 +40,9 @@ export function securityMiddleware(){
                     return res.status(429).json({error:'Too many requests!'});
                 }
                 return res.status(403).json({error:'Forbidden!'});
+            }
+            if (decision.results.some(isSpoofedBot)) {
+                return res.status(403).json({ error: 'Forbidden!' });
             }
         }catch(e){
             console.error('Arcjet Middleware error:',e);

@@ -49,9 +49,10 @@ export function attachWebSocketServer(server){
                     const reason = decision.reason.isRateLimit() ? 'Rate limit exceeded' : 'Access denied';
 
                     socket.close(code,reason);
-                    // if(decision.reason.isRateLimit()){
-                    //     // return resizeBy.status(423).json({'error':'Too many requests'});
-                    // }
+                    return;
+                }
+                if (decision.results.some(isSpoofedBot)) {
+                    return res.status(403).json({ error: 'Forbidden!' });
                 }
             }catch(e){
                 console.error('WS Connection Error:',e);
