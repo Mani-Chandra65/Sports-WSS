@@ -3,7 +3,7 @@ import { isSpoofedBot } from "@arcjet/inspect";
 import { wsArcjet } from "../routes/arcjet.js";
 
 const HEARTBEAT_INTERVAL_MS = 30000;
-
+const MAX_SUBSCRIPTIONS_PER_SOCKET = 2;
 const matchSubscribers = new Map();
 
 function subscribe(matchId,socket){
@@ -63,6 +63,11 @@ function handleMessage(socket,data){
         return;
     }
     if(message?.type=="subscribe" && Number.isInteger(message.matchId)){
+        const isNewSubscription = !socket.subsciptions.has(message.matchID);
+        if (isNewSubscription && socket.subsciptions.size >= MAX_SUBSCRIPTIONS_PER_SOCKET) {
+            sendJSON(socket,{type:'error',message:'Subscription limit reached'});
+            return;
+        }
         subscribe(message.matchId,socket);
         socket.subsciptions.add(message.matchId);
         sendJSON(socket,{type:'subscribed',matchId:message.matchId});
