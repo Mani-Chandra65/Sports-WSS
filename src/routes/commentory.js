@@ -82,7 +82,17 @@ commentoryRouter.post('/', async (req, res) => {
                 tags,
             })
             .returning();
-
+            
+            if (typeof res.app.locals.broadcastCommentary === "function") {
+                try {
+                    res.app.locals.broadcastCommentary(result.matchId, result);
+                } catch (broadcastError) {
+                    console.error("Commentary broadcast error:", broadcastError);
+                }
+            }if(res.app.locals.broadcastCommentary){
+                res.app.locals.broadcastCommentary(result.matchId,result);
+            }
+            
         res.status(201).json({data:result});
     } catch (e) {
         console.error('Commentary creation error:', e);

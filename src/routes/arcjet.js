@@ -1,3 +1,4 @@
+import { isSpoofedBot } from '@arcjet/inspect';
 import arcjet, { detectBot,shield, slidingWindow } from '@arcjet/node';
 import 'dotenv/config'
 
@@ -14,7 +15,7 @@ export const httpArcjet =
         key:arcjetKey,
         rules: [
             shield({ mode: arcjetMode}),
-            detectBot({mode:arcjetMode, allow:['CATEGORY:SEARCH_ENGINE','CATEGORY:PREVIEW']}),
+            detectBot({mode:arcjetMode, allow:['CATEGORY:SEARCH_ENGINE','CATEGORY:PREVIEW','POSTMAN',]}),
             slidingWindow({mode:arcjetMode, interval:'10s', max:50})
         ]
     });
@@ -24,7 +25,7 @@ export const wsArcjet =
         key:arcjetKey,
         rules: [
             shield({ mode: arcjetMode}),
-            detectBot({mode:arcjetMode, allow:['CATEGORY:SEARCH_ENGINE','CATEGORY:PREVIEW']}),
+            detectBot({mode:arcjetMode, allow:['CATEGORY:SEARCH_ENGINE','CATEGORY:PREVIEW','POSTMAN','CATEGORY:TOOL']}),
             slidingWindow({mode:arcjetMode, interval:'2s', max:5})
         ]
     });
