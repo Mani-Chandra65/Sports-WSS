@@ -1,17 +1,77 @@
 import { WebSocket, WebSocketServer } from "ws";
+import { isSpoofedBot } from "@arcjet/inspect";
 import { wsArcjet } from "../routes/arcjet.js";
 
 const HEARTBEAT_INTERVAL_MS = 30000;
 
+const matchSubscribers = new Map();
+
+function subscribe(matchID,socket){
+    if(!matchSubscribers.has(matchID)){
+        matchSubscribers.set(matchID, new Set());
+    }
+    matchSubscribers.get(matchID).add(socket);
+}
+
+function unsubscribe(matchID,socket){
+    const subscribers = matchSubscribers.get(matchID);
+
+    if(!subscribers) return;
+
+    subscribers.delete(socket);
+
+    if(subscribers.size === 0){
+        matchSubscribers.delete(matchID);
+    }
+}
+
+function cleanupSubscriptions(socket){
+    for(const matchId of socket.subsciptions){
+        unsubscribe(matchId,socket);
+    }
+}
+
+function broadcastToMatch(matchID,payload){
+    const subscribers = matchSubscribers.get(matchID);
+    if(!subscribers || subscribers.size === 0) return;
+    const message = JSON.stringify(payload);
+
+    for(const client of subscribers){
+        if(client.readyState==WebSocket.OPEN){
+            client.send(message);
+        }
+    }
+}
 function sendJSON(socket,payload){
     if(socket.readyState != WebSocket.OPEN) return;
     socket.send(JSON.stringify(payload));
 }
 
-function broadcast(wss,payload){
+function broadcastToAll(wss,payload){
     for (const client of wss.clients){
         if(client.readyState!=WebSocket.OPEN) continue;
         client.send(JSON.stringify(payload));
+    }
+}
+
+function handleMessage(socket,data){
+    let message;
+    try{
+        message = JSON.parse(data.toString());
+    }catch(e){
+        sendJSON(socket,{type:'error',message:'Invalid JSON'});
+        return;
+    }
+    if(message?.type=="subscribe" && Number.isInteger(message.matchID)){
+        subscribe(message.matchID,socket);
+        socket.subsciptions.add(message.matchID);
+        sendJSON(socket,{type:'subscribed',matchID:message.matchID});
+        return;
+    }
+    if(message?.type=="unsubscribe" && Number.isInteger(message.matchID)){
+        unsubscribe(message.matchID,socket);
+        socket.subsciptions.delete(message.matchID);
+        sendJSON(socket,{type:'unsubscribed',matchID:message.matchID});
     }
 }
 
@@ -63,18 +123,34 @@ export function attachWebSocketServer(server){
         }
 
         socket.isAlive = true;
-        sendJSON(socket, {type:'welcome'});
-
+        
         socket.on('pong',() => {
             socket.isAlive = true;
         });
+        
+        socket.subsciptions = new Set();
+        
+        sendJSON(socket, {type:'welcome'});
 
+        socket.on('message',(data) => {
+            handleMessage(socket,data);
+        })
+        socket.on('error', () => {
+            socket.terminate();
+        });
+        socket.on('close', () => {
+            cleanupSubscriptions(socket);
+        });
         socket.on('error', console.error);
     })
 
     function broadcastMatchCreated(match){
-        broadcast(wss, {type:'match_created',data:match});
+        broadcastToAll(wss, {type:'match_created',data:match});
     }
 
-    return {broadcastMatchCreated}
+    function broadcastCommentary(matchID,comment){
+        broadcastToMatch(matchID,{type: 'commentary', data:comment})
+    }
+
+    return {broadcastMatchCreated,broadcastCommentary}
 }
