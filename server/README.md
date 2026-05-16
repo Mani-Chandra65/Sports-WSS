@@ -68,7 +68,7 @@ npm run dev
 ```
 
 **Expected Output:**
-```
+```text
 Server started on http://localhost:8000
 WebSocketServer is running on ws://localhost:8000/ws
 ```
@@ -86,7 +86,7 @@ curl http://localhost:8000/
 ## API Documentation
 
 ### Base URL
-```
+```text
 Development:  http://localhost:8000
 WebSocket:    ws://localhost:8000/ws
 ```
@@ -94,7 +94,7 @@ WebSocket:    ws://localhost:8000/ws
 ### Request Flow Diagram
 
 #### HTTP Request → Response Flow
-```
+```text
 ┌─────────────┐
 │   Client    │
 └──────┬──────┘
@@ -167,6 +167,7 @@ curl "http://localhost:8000/matches?limit=10"
 ```
 
 **Query Parameters:**
+
 | Parameter | Type | Default | Max | Description |
 |:----------|:-----|:--------|:-----|:------------|
 | `limit` | number | 50 | 100 | Number of matches to return |
@@ -438,7 +439,7 @@ Stores sports match events with status calculated at insert time.
 | `createdAt` | TIMESTAMPTZ | Record creation timestamp |
 
 **Status Calculation Logic (at insert time):**
-```
+```text
 NOW() < startTime          → 'scheduled'
 startTime ≤ NOW() < endTime → 'live'
 NOW() ≥ endTime            → 'finished'
