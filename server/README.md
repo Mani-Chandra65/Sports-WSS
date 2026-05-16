@@ -16,10 +16,10 @@ WebSocL1 Server enables real-time sports match management and live commentary br
 
 **Key Features:**
 - **Real-time Broadcasting** — WebSocket-based live updates for matches and commentary
-- **Enterprise Security** — Arcjet integration with bot detection, rate limiting, and OWASP Top 10 protection
+- **Enterprise Security** — Arcjet integration with bot detection, rate limiting, and attack signature protection
 - **Type-Safe Operations** — Drizzle ORM with TypeScript-like validation via Zod
 - **High Performance** — Concurrent connection handling with efficient pub/sub model
-- **Auto-calculated Status** — Match status (scheduled/live/finished) computed from timestamps
+- **Status Management** — Match status (scheduled/live/finished) calculated at insert time; stored in database but does not auto-update
 
 ---
 
@@ -207,11 +207,13 @@ curl "http://localhost:8000/matches?limit=10"
 }
 ```
 
+**Note:** This endpoint returns a bare array, unlike other endpoints which wrap responses in a `{ "data": ... }` envelope. Consider standardizing this for consistent client-side handling.
+
 ---
 
 ### **POST /matches** — Create Match
 
-Create a new match event. Status is automatically calculated based on `startTime` and `endTime`.
+Create a new match event. Status is calculated at creation time based on `startTime` and `endTime`, then stored in the database.
 
 **Request:**
 ```bash
@@ -420,7 +422,7 @@ The server connects to PostgreSQL using **Neon Cloud** (serverless PostgreSQL).
 ### Tables
 
 #### `matches` Table
-Stores sports match events with auto-calculated status.
+Stores sports match events with status calculated at insert time.
 
 | Column | Type | Notes |
 |:-------|:-----|:------|
@@ -428,19 +430,21 @@ Stores sports match events with auto-calculated status.
 | `sport` | TEXT | Sport type (Football, Cricket, etc.) |
 | `homeTeam` | TEXT | Home team name |
 | `awayTeam` | TEXT | Away team name |
-| `status` | ENUM | `'scheduled'` \| `'live'` \| `'finished'` — auto-calculated |
+| `status` | ENUM | `'scheduled'` \| `'live'` \| `'finished'` — set at insert time, **does not update** |
 | `startTime` | TIMESTAMPTZ | Match start (UTC) |
 | `endTime` | TIMESTAMPTZ | Match end (UTC) |
 | `homeScore` | INTEGER | Current score for home team |
 | `awayScore` | INTEGER | Current score for away team |
 | `createdAt` | TIMESTAMPTZ | Record creation timestamp |
 
-**Status Calculation:**
+**Status Calculation Logic (at insert time):**
 ```
 NOW() < startTime          → 'scheduled'
 startTime ≤ NOW() < endTime → 'live'
 NOW() ≥ endTime            → 'finished'
 ```
+
+**⚠️ KNOWN LIMITATION:** Status is computed once at creation and stored. It will **not automatically update** as time passes. For example, a match created with `startTime` 1 hour in the future will stay `'scheduled'` even after that time passes, until the match record is explicitly updated. Consider implementing a background job or requiring clients to recalculate status based on timestamps for accurate real-time status.
 
 ---
 
@@ -507,11 +511,11 @@ ARCJET_MODE="LIVE"  # or "DRY_RUN" for testing
 
 **Arcjet Rules** (see `src/routes/arcjet.js`):
 
-| Layer | Rule | HTTP Limit | WS Limit | Allowed |
-|:------|:-----|:-----------|:---------|:--------|
-| **Bot Detection** | detectBot | — | — | Search engines, preview crawlers |
-| **Rate Limiting** | slidingWindow | 50 req / 10s | 5 msg / 2s | Arcjet sliding window |
-| **Protection** | shield | OWASP Top 10 | OWASP Top 10 | All except bot traffic |
+| Layer | Rule | HTTP Limit | WS Limit | Purpose |
+|:------|:-----|:-----------|:---------|:---------|
+| **Bot Detection** | detectBot | — | — | Identifies and blocks non-allowed bots |
+| **Rate Limiting** | slidingWindow | 50 req / 10s | 5 msg / 2s | Limits request/message frequency |
+| **Attack Signatures** | shield | Active | Active | Blocks common attack patterns (SQLi, XSS, traversal) |
 
 **Modes:**
 - `LIVE` — Production mode, blocks violating requests
@@ -546,22 +550,28 @@ If you exceed limits:
 }
 ```
 
+**Note:** Tools like Postman and custom clients are currently blocked by Arcjet. To allow them, you'll need to add these to the `allow` configuration in `src/routes/arcjet.js`.
+
 ### Bot Protection
 
 Arcjet automatically allows:
 - Search engine crawlers (Google, Bing)
 - Preview crawlers (Discord, Twitter unfurl)
-- Tools (Postman for testing)
 
 Other bots are blocked unless configured.
 
-### OWASP Top 10 Protection
+### Attack Signature Protection
 
-Arcjet Shield enables automatic protection against:
-- SQL Injection
-- XSS (Cross-Site Scripting)
-- CSRF (Cross-Site Request Forgery)
-- And more...
+Arcjet Shield protects against common attack patterns:
+- **SQL Injection** — Detects and blocks SQLi payloads
+- **XSS (Cross-Site Scripting)** — Identifies malicious script injection attempts
+- **Path Traversal** — Blocks directory traversal attacks
+- **Other signature-based attacks** — Generic payload matching
+
+**Important:** This provides signature-based protection, not comprehensive OWASP Top 10 coverage. Notable omissions:
+- **CSRF** — Requires app-level implementation (token validation, SameSite cookies, origin checks)
+- **Authentication/Session vulnerabilities** — Requires proper credential handling in application code
+- **Business logic flaws** — Cannot be detected by signatures alone
 
 ---
 
@@ -582,8 +592,7 @@ Arcjet Shield enables automatic protection against:
 ### Guidelines
 
 1. **Fork** the repository
-2. **Create feature branch:** `git checkout -b 
-Feature/your-feature`
+2. **Create feature branch:** `git checkout -b Feature/your-feature`
 3. **Follow code style:**
    - Use ES modules (`import`/`export`)
    - Validate inputs with Zod schemas
